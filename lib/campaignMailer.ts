@@ -162,9 +162,14 @@ function getMaxRecipientsLimit(): number {
 export async function sendCampaignSequence(
   args: SendCampaignSequenceArgs
 ): Promise<CampaignSendSummary> {
+  console.log(`📧 [Campaign Mailer] Starting send for campaign ${args.campaignId}`);
+  console.log(`📧 [Campaign Mailer] Recipients: ${args.recipients.length}, Templates: ${args.emailSequence.length}`);
+  
   const realSendEnabled = parseBoolean(process.env.ENABLE_REAL_EMAIL_SEND, false);
+  console.log(`📧 [Campaign Mailer] ENABLE_REAL_EMAIL_SEND = ${realSendEnabled}`);
 
   if (!realSendEnabled) {
+    console.warn(`⚠️ [Campaign Mailer] Real send is DISABLED`);
     return {
       skipped: true,
       reason:
@@ -178,6 +183,7 @@ export async function sendCampaignSequence(
 
   const smtp = getSmtpConfig();
   if (!smtp) {
+    console.error(`❌ [Campaign Mailer] SMTP config is incomplete or missing`);
     return {
       skipped: true,
       reason:
@@ -188,6 +194,8 @@ export async function sendCampaignSequence(
       failures: [],
     };
   }
+  
+  console.log(`📧 [Campaign Mailer] SMTP Config: ${smtp.host}:${smtp.port}, secure=${smtp.secure}, user=${smtp.user}`);
 
   const recipients = normalizeRecipients(args.recipients);
   const emailSequence = sanitizeEmailSequence(args.emailSequence);
@@ -229,8 +237,12 @@ export async function sendCampaignSequence(
   });
 
   try {
+    console.log(`🔌 [SMTP] Verifying connection to ${smtp.host}:${smtp.port} (secure: ${smtp.secure})`);
     await transporter.verify();
+    console.log(`✅ [SMTP] Connection verified successfully`);
   } catch (error) {
+    console.error(`❌ [SMTP] Connection verification failed:`, error);
+    console.error(`❌ [SMTP] Config: host=${smtp.host}, port=${smtp.port}, secure=${smtp.secure}, user=${smtp.user}`);
     return {
       skipped: false,
       attempted,
@@ -298,10 +310,12 @@ export async function sendCampaignSequence(
           });
         }
       } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "Unknown send error";
+        console.error(`❌ [Email Send] Failed to send to ${recipient.email}: ${errorMsg}`);
         failures.push({
           recipientEmail: recipient.email,
           subject,
-          error: error instanceof Error ? error.message : "Unknown send error",
+          error: errorMsg,
         });
 
         // Report progress on failures too
