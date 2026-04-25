@@ -20,7 +20,7 @@ import gmailRoutes from "./routes/gmail";
 import trackingRoutes from "./routes/tracking";
 
 const app = express();
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
 
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/smart-outreach";
