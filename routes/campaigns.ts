@@ -6,7 +6,7 @@ import { PROSPECTS_DATABASE } from "../lib/prospectDatabase";
 import {
   CampaignRecipient,
   sendCampaignSequence,
-} from "../lib/campaignMailer";
+} from "../lib/resendMailer";
 
 
 const router = express.Router();
