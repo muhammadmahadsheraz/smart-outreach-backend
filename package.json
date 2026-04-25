@@ -1,10 +1,10 @@
 {
-  "name": "backend",
+  "name": "smart-outreach-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Smart Outreach API server",
+  "main": "dist/server.js",
   "scripts": {
-    "dev": "nodemon server.ts",
+    "dev": "nodemon --exec ts-node server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -13,28 +13,30 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
-  "devDependencies": {
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/jsonwebtoken": "^9.0.10",
-    "@types/mailparser": "^3.4.6",
-    "@types/node": "^25.2.3",
-    "nodemon": "^3.1.11",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
-  },
   "dependencies": {
-    "@types/bcryptjs": "^2.4.6",
-    "@types/imap": "^0.8.43",
-    "@types/nodemailer": "^7.0.11",
     "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
     "dotenv": "^17.3.1",
+    "express": "^4.21.2",
     "googleapis": "^171.4.0",
     "imap": "^0.8.19",
     "jsonwebtoken": "^9.0.3",
     "mailparser": "^3.9.8",
     "mongodb": "^7.1.0",
     "mongoose": "^9.2.4",
-    "nodemailer": "^8.0.2"
+    "nodemailer": "^8.0.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/imap": "^0.8.43",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/mailparser": "^3.4.6",
+    "@types/node": "^25.2.3",
+    "@types/nodemailer": "^7.0.11",
+    "nodemon": "^3.1.11"
   }
 }
