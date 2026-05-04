@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import { sendViaGmail } from "./gmailApi";
 
 export interface CampaignRecipient {
   email: string;
@@ -33,20 +33,12 @@ export type ProgressCallback = (progress: {
   failed: number;
   total: number;
   percentComplete: number;
-}) => Promise<void>
-
-interface SmtpConfig {
-  host: string;
-  port: number;
-  secure: boolean;
-  user: string;
-  pass: string;
-  from: string;
-}
+}) => Promise<void>;
 
 interface SendCampaignSequenceArgs {
   campaignId: string;
   campaignName: string;
+  userId: string;
   recipients: CampaignRecipient[];
   emailSequence: CampaignEmailTemplate[];
   onProgress?: ProgressCallback;
@@ -54,68 +46,28 @@ interface SendCampaignSequenceArgs {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
-/**
- * Wraps all links in the text with the tracking URL
- */
 function wrapLinksWithTracking(text: string, campaignId: string): string {
-  const trackingBase = process.env.TRACKING_BASE_URL || "http://localhost:4000/api/track";
-  
-  // Regex to find http/https/www links
-  // This avoids wrapping email addresses or already-wrapped links
+  const trackingBase =
+    process.env.TRACKING_BASE_URL ||
+    "http://localhost:4000/api/track";
   const urlRegex = /(?<!aria-label=")(https?:\/\/[^\s<"']+)/g;
-  
   return text.replace(urlRegex, (url) => {
-    // Avoid double wrapping
     if (url.includes("/api/track?")) return url;
-    
-    const encodedUrl = encodeURIComponent(url);
-    return `${trackingBase}?r=${encodedUrl}&c=${campaignId}`;
+    return `${trackingBase}?r=${encodeURIComponent(url)}&c=${campaignId}`;
   });
 }
 
 function parseBoolean(value: string | undefined, fallback = false): boolean {
-  if (!value) {
-    return fallback;
-  }
-
+  if (!value) return fallback;
   return ["1", "true", "yes", "on"].includes(value.toLowerCase());
-}
-
-function getSmtpConfig(): SmtpConfig | null {
-  const host = process.env.SMTP_HOST?.trim();
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS?.trim();
-
-  if (!host || !user || !pass) {
-    return null;
-  }
-
-  const parsedPort = Number(process.env.SMTP_PORT ?? 587);
-  const port = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 587;
-  const secure = parseBoolean(process.env.SMTP_SECURE, port === 465);
-  const from = process.env.SMTP_FROM?.trim() || user;
-
-  return {
-    host,
-    port,
-    secure,
-    user,
-    pass,
-    from,
-  };
 }
 
 function normalizeRecipients(recipients: CampaignRecipient[]): CampaignRecipient[] {
   const seen = new Set<string>();
   const normalized: CampaignRecipient[] = [];
-
   for (const recipient of recipients) {
     const email = recipient.email?.trim().toLowerCase();
-
-    if (!email || !EMAIL_REGEX.test(email) || seen.has(email)) {
-      continue;
-    }
-
+    if (!email || !EMAIL_REGEX.test(email) || seen.has(email)) continue;
     seen.add(email);
     normalized.push({
       ...recipient,
@@ -125,29 +77,27 @@ function normalizeRecipients(recipients: CampaignRecipient[]): CampaignRecipient
       role: recipient.role?.trim(),
     });
   }
-
   return normalized;
 }
 
-function sanitizeEmailSequence(sequence: CampaignEmailTemplate[]): CampaignEmailTemplate[] {
+function sanitizeEmailSequence(
+  sequence: CampaignEmailTemplate[]
+): CampaignEmailTemplate[] {
   return sequence
     .map((template, index) => ({
       id: template.id || String(index + 1),
       subject: String(template.subject ?? "").trim(),
       body: String(template.body ?? "").trim(),
     }))
-    .filter((template) => template.subject.length > 0 && template.body.length > 0);
+    .filter((t) => t.subject.length > 0 && t.body.length > 0);
 }
 
 function personalizeBody(body: string, recipient: CampaignRecipient): string {
   const firstName = recipient.name?.split(" ")[0] || "there";
-
   return body
-    // Frontend format placeholders
     .replace(/\{\{\s*PROSPECT_NAME\s*\}\}/g, recipient.name || "there")
     .replace(/\{\{\s*COMPANY_NAME\s*\}\}/g, recipient.company || "your company")
     .replace(/\{\{\s*PROSPECT_ROLE\s*\}\}/g, recipient.role || "your role")
-    // Legacy format placeholders (for backward compatibility)
     .replace(/\{\{\s*name\s*\}\}/gi, recipient.name || "there")
     .replace(/\{\{\s*first_name\s*\}\}/gi, firstName)
     .replace(/\{\{\s*company\s*\}\}/gi, recipient.company || "your company")
@@ -163,8 +113,10 @@ export async function sendCampaignSequence(
   args: SendCampaignSequenceArgs
 ): Promise<CampaignSendSummary> {
   console.log(`📧 [Campaign Mailer] Starting send for campaign ${args.campaignId}`);
-  console.log(`📧 [Campaign Mailer] Recipients: ${args.recipients.length}, Templates: ${args.emailSequence.length}`);
-  
+  console.log(
+    `📧 [Campaign Mailer] Recipients: ${args.recipients.length}, Templates: ${args.emailSequence.length}`
+  );
+
   const realSendEnabled = parseBoolean(process.env.ENABLE_REAL_EMAIL_SEND, false);
   console.log(`📧 [Campaign Mailer] ENABLE_REAL_EMAIL_SEND = ${realSendEnabled}`);
 
@@ -180,22 +132,6 @@ export async function sendCampaignSequence(
       failures: [],
     };
   }
-
-  const smtp = getSmtpConfig();
-  if (!smtp) {
-    console.error(`❌ [Campaign Mailer] SMTP config is incomplete or missing`);
-    return {
-      skipped: true,
-      reason:
-        "SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, and SMTP_FROM in backend/.env.",
-      attempted: 0,
-      sent: 0,
-      failed: 0,
-      failures: [],
-    };
-  }
-  
-  console.log(`📧 [Campaign Mailer] SMTP Config: ${smtp.host}:${smtp.port}, secure=${smtp.secure}, user=${smtp.user}`);
 
   const recipients = normalizeRecipients(args.recipients);
   const emailSequence = sanitizeEmailSequence(args.emailSequence);
@@ -225,47 +161,11 @@ export async function sendCampaignSequence(
   const maxRecipients = getMaxRecipientsLimit();
   const recipientBatch = recipients.slice(0, maxRecipients);
   const attempted = recipientBatch.length * emailSequence.length;
-
-  const transporter = nodemailer.createTransport({
-    host: smtp.host,
-    port: smtp.port,
-    secure: smtp.secure,
-    auth: {
-      user: smtp.user,
-      pass: smtp.pass,
-    },
-  });
-
-  try {
-    console.log(`🔌 [SMTP] Verifying connection to ${smtp.host}:${smtp.port} (secure: ${smtp.secure})`);
-    await transporter.verify();
-    console.log(`✅ [SMTP] Connection verified successfully`);
-  } catch (error) {
-    console.error(`❌ [SMTP] Connection verification failed:`, error);
-    console.error(`❌ [SMTP] Config: host=${smtp.host}, port=${smtp.port}, secure=${smtp.secure}, user=${smtp.user}`);
-    return {
-      skipped: false,
-      attempted,
-      sent: 0,
-      failed: attempted,
-      failures: [
-        {
-          recipientEmail: recipientBatch[0]?.email || "",
-          subject: emailSequence[0]?.subject || "",
-          error:
-            error instanceof Error
-              ? `SMTP connection verification failed: ${error.message}`
-              : "SMTP connection verification failed",
-        },
-      ],
-      reason: "Unable to connect to SMTP server with current credentials/settings.",
-    };
-  }
+  const total = attempted;
+  const progressUpdateInterval = Math.max(5, Math.ceil(total / 20));
 
   const failures: CampaignSendFailure[] = [];
   let sent = 0;
-  const total = recipientBatch.length * emailSequence.length;
-  const progressUpdateInterval = Math.max(5, Math.ceil(total / 20)); // Update every ~5% or every 5 emails
 
   for (let i = 0; i < recipientBatch.length; i++) {
     const recipient = recipientBatch[i];
@@ -273,35 +173,30 @@ export async function sendCampaignSequence(
       const template = emailSequence[j];
       const subject = personalizeBody(template.subject, recipient);
       let bodyText = personalizeBody(template.body, recipient);
-      
-      // Wrap links for tracking
+
       bodyText = wrapLinksWithTracking(bodyText, args.campaignId);
 
-      const trackingBase = process.env.TRACKING_BASE_URL || "http://localhost:4000/api/track";
+      const trackingBase =
+        process.env.TRACKING_BASE_URL || "http://localhost:4000/api/track";
       const openPixelUrl = `${trackingBase}/open?c=${args.campaignId}`;
       const attributionId = `smart-outreach-cid-${args.campaignId}`;
-      const bodyHtml = bodyText.replace(/\n/g, "<br/>") + 
+      const bodyHtml =
+        bodyText.replace(/\n/g, "<br/>") +
         `<img src="${openPixelUrl}" width="1" height="1" style="display:none;" />` +
         `<div style="display:none; white-space:nowrap; font-size:1px; color:transparent; opacity:0;">attribution-id:${attributionId}</div>`;
 
-
       try {
-        await transporter.sendMail({
-          from: smtp.from,
-          to: recipient.email,
-          subject,
-          html: bodyHtml,
-          headers: {
-            "X-Campaign-Name": args.campaignName,
-            "X-Campaign-Sequence-Id": template.id || "",
-          },
+        await sendViaGmail(args.userId, recipient.email, subject, bodyHtml, {
+          "X-Campaign-Name": args.campaignName,
+          "X-Campaign-Sequence-Id": template.id || "",
         });
-
 
         sent += 1;
 
-        // Report progress every N emails
-        if (args.onProgress && (sent % progressUpdateInterval === 0 || sent === total)) {
+        if (
+          args.onProgress &&
+          (sent % progressUpdateInterval === 0 || sent === total)
+        ) {
           await args.onProgress({
             sent,
             failed: failures.length,
@@ -310,16 +205,14 @@ export async function sendCampaignSequence(
           });
         }
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : "Unknown send error";
-        console.error(`❌ [Email Send] Failed to send to ${recipient.email}: ${errorMsg}`);
-        failures.push({
-          recipientEmail: recipient.email,
-          subject,
-          error: errorMsg,
-        });
+        const errorMsg =
+          error instanceof Error ? error.message : "Unknown send error";
+        console.error(
+          `❌ [Email Send] Failed to send to ${recipient.email}: ${errorMsg}`
+        );
+        failures.push({ recipientEmail: recipient.email, subject, error: errorMsg });
 
-        // Report progress on failures too
-        if (args.onProgress && (failures.length % progressUpdateInterval === 0)) {
+        if (args.onProgress && failures.length % progressUpdateInterval === 0) {
           await args.onProgress({
             sent,
             failed: failures.length,

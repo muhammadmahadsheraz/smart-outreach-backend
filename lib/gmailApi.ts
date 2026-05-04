@@ -10,6 +10,7 @@ const GMAIL_REDIRECT_URI = process.env.GMAIL_REDIRECT_URI || "http://localhost:3
 
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
@@ -33,8 +34,8 @@ export function getAuthUrl(userId: string): string {
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: SCOPES,
-    prompt: "consent", // Force consent to always get refresh_token
-    state: userId, // Pass userId in state to identify user in callback
+    prompt: "consent",
+    state: userId,
   });
 }
 
@@ -294,8 +295,64 @@ export async function syncGmailMessages(userId: string): Promise<{ synced: numbe
 }
 
 /**
- * Extract plain text body from Gmail message payload
+ * Send an email via Gmail API using the user's stored OAuth tokens.
+ * Returns true on success, throws on failure.
  */
+export async function sendViaGmail(
+  userId: string,
+  to: string,
+  subject: string,
+  htmlBody: string,
+  headers?: Record<string, string>
+): Promise<void> {
+  const authResult = await getAuthenticatedClient(userId);
+  if (!authResult) {
+    throw new Error("Gmail not connected for this user.");
+  }
+
+  const { oauth2Client, gmailEmail } = authResult;
+  const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
+  // Build RFC 2822 raw message
+  const headerLines = [
+    `From: ${gmailEmail}`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: text/html; charset=UTF-8`,
+    ...(headers
+      ? Object.entries(headers).map(([k, v]) => `${k}: ${v}`)
+      : []),
+  ];
+
+  const rawMessage = [
+    ...headerLines,
+    "",
+    htmlBody,
+  ].join("\r\n");
+
+  // Gmail API requires base64url encoding
+  const encodedMessage = Buffer.from(rawMessage)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: encodedMessage },
+  });
+}
+
+/**
+ * Check if a user has Gmail connected and the send scope available
+ */
+export async function canSendViaGmail(userId: string): Promise<boolean> {
+  const tokenDoc = await GmailToken.findOne({ userId });
+  return !!tokenDoc?.refreshToken;
+}
+
+
 function extractBodyFromPayload(payload: any): string {
   if (!payload) return "";
 

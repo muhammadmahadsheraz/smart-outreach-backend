@@ -27,8 +27,10 @@ const verifyToken = (req: any, res: any, next: any) => {
 router.get("/auth-url", verifyToken, async (req: any, res) => {
   try {
     const userId = req.user.userId;
-    const url = getAuthUrl(userId);
-    console.log("🔵 [gmail] Auth URL generated for user:", userId);
+    const redirectTo = (req.query.redirect as string) || "inbox";
+    const state = `${userId}|${redirectTo}`;
+    const url = getAuthUrl(state);
+    console.log("🔵 [gmail] Auth URL generated for user:", userId, "redirect:", redirectTo);
     res.json({ ok: true, url });
   } catch (error: any) {
     console.error("🔴 [gmail] Auth URL error:", error.message);
@@ -39,21 +41,29 @@ router.get("/auth-url", verifyToken, async (req: any, res) => {
 // OAuth2 callback — receives the authorization code from Google
 router.get("/callback", async (req: any, res) => {
   try {
-    const { code, state: userId } = req.query;
+    const { code, state } = req.query;
 
-    if (!code || !userId) {
+    if (!code || !state) {
       return res.status(400).json({ ok: false, error: "Missing code or state" });
     }
 
-    console.log("🔵 [gmail] OAuth callback for user:", userId);
-    const result = await handleOAuthCallback(code as string, userId as string);
+    // Parse userId and redirect path from state
+    const stateStr = state as string;
+    const [userId, redirectTo] = stateStr.includes("|")
+      ? stateStr.split("|")
+      : [stateStr, "inbox"];
+
+    console.log("🔵 [gmail] OAuth callback for user:", userId, "redirect:", redirectTo);
+    const result = await handleOAuthCallback(code as string, userId);
     console.log("✅ [gmail] Connected Gmail:", result.gmailEmail);
 
-    // Redirect back to the inbox page with success
-    res.redirect("/inbox?gmail=connected");
+    // Redirect back to the frontend originating page with success
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    res.redirect(`${frontendUrl}/${redirectTo}?gmail=connected`);
   } catch (error: any) {
     console.error("🔴 [gmail] Callback error:", error.message);
-    res.redirect("/inbox?gmail=error&message=" + encodeURIComponent(error.message));
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    res.redirect(`${frontendUrl}/inbox?gmail=error&message=` + encodeURIComponent(error.message));
   }
 });
 

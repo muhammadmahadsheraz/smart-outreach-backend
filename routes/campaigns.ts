@@ -138,6 +138,7 @@ router.post("/create", verifyToken, async (req: any, res: Response) => {
       sendCampaignInBackground(
         campaign._id.toString(),
         campaign.name,
+        userId,
         selectedProspectContacts,
         emailSequence
       ).catch((error) => {
@@ -330,6 +331,7 @@ export default router;
 async function sendCampaignInBackground(
   campaignId: string,
   campaignName: string,
+  userId: string,
   recipients: CampaignRecipient[],
   emailSequence: Array<{ id: string; subject: string; body: string }>
 ) {
@@ -345,6 +347,7 @@ async function sendCampaignInBackground(
     const emailDelivery = await sendCampaignSequence({
       campaignId,
       campaignName,
+      userId,
       recipients,
       emailSequence,
       // Progress callback - update the database periodically
