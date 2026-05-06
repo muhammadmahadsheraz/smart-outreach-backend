@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { sign, verify } from "jsonwebtoken";
-import { verifyUser, createUser, saveCompanyData, getCompanyData, saveClientData, getClientData, saveProductData, getProductData } from "../lib/userStore";
+import { verifyUser, createUser, updateUser, findUserById, saveCompanyData, getCompanyData, saveClientData, getClientData, saveProductData, getProductData } from "../lib/userStore";
 import { Settings } from "../models/Subscription";
 
 const router = Router();
@@ -310,25 +310,48 @@ router.post("/settings/personal-info", verifyToken, async (req: any, res) => {
             return;
         }
 
-        // If password update is requested, verify old password
-        if (newPassword) {
-            const user = await verifyUser(email || settings.personalInfo.email, oldPassword || "");
+        // ── Password update ──────────────────────────────────────────────────
+        if (newPassword && newPassword.trim() !== "") {
+            // oldPassword is required when changing password
+            if (!oldPassword || oldPassword.trim() === "") {
+                res.status(400).json({ ok: false, error: "Old password is required to set a new password" });
+                return;
+            }
+
+            // Verify old password against User model
+            const currentEmail = email || settings.personalInfo.email;
+            const user = await verifyUser(currentEmail, oldPassword);
             if (!user) {
                 res.status(401).json({ ok: false, error: "Old password is incorrect" });
                 return;
             }
-            // TODO: Hash the new password and update User model
-            // For now, you'll need to implement the password update in userStore
+
+            // Update password in User model (hashed)
+            await updateUser(userId, { password: newPassword });
         }
 
-        // Update settings
-        settings.personalInfo.firstName = firstName || settings.personalInfo.firstName;
-        settings.personalInfo.lastName = lastName || settings.personalInfo.lastName;
-        settings.personalInfo.email = email || settings.personalInfo.email;
+        // ── Personal info update ─────────────────────────────────────────────
+        const userUpdates: { firstName?: string; lastName?: string; email?: string } = {};
+        if (firstName && firstName.trim()) {
+            settings.personalInfo.firstName = firstName;
+            userUpdates.firstName = firstName;
+        }
+        if (lastName && lastName.trim()) {
+            settings.personalInfo.lastName = lastName;
+            userUpdates.lastName = lastName;
+        }
+        if (email && email.trim()) {
+            settings.personalInfo.email = email;
+            userUpdates.email = email;
+        }
 
         await settings.save();
 
-        // TODO: Update User model if firstName, lastName, or email changed
+        // Sync User model with any changed personal info fields
+        if (Object.keys(userUpdates).length > 0) {
+            await updateUser(userId, userUpdates);
+        }
+
         res.json({ ok: true, data: settings });
     } catch (error) {
         console.error("Settings personal info update error", error);
@@ -347,17 +370,21 @@ router.post("/settings/billing", verifyToken, async (req: any, res) => {
             return;
         }
 
-        // Update billing details
-        if (companyName) settings.billingDetails.companyName = companyName;
-        if (address) settings.billingDetails.address = address;
-        if (city) settings.billingDetails.city = city;
-        if (zipCode) settings.billingDetails.zipCode = zipCode;
-        if (country) settings.billingDetails.country = country;
-        if (companyNumber) settings.billingDetails.companyNumber = companyNumber;
+        // Update billing details (allow empty string to clear fields)
+        if (companyName !== undefined) settings.billingDetails.companyName = companyName;
+        if (address !== undefined) settings.billingDetails.address = address;
+        if (city !== undefined) settings.billingDetails.city = city;
+        if (zipCode !== undefined) settings.billingDetails.zipCode = zipCode;
+        if (country !== undefined) settings.billingDetails.country = country;
+        if (companyNumber !== undefined) settings.billingDetails.companyNumber = companyNumber;
 
         await settings.save();
 
-        // TODO: Update User model if companyName changed
+        // Sync company name to User model since it's shared
+        if (companyName && companyName.trim()) {
+            await updateUser(userId, { company: companyName });
+        }
+
         res.json({ ok: true, data: settings });
     } catch (error) {
         console.error("Settings billing update error", error);

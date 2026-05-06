@@ -243,16 +243,25 @@ router.get("/opportunities", verifyToken, async (req: any, res: Response) => {
       query.campaignId = { $exists: true, $ne: null };
     }
 
-    console.log(`[Opps API] Querying InboxMessage with:`, JSON.stringify(query));
     const replies = await InboxMessage.find(query).sort({ receivedAt: -1 }).lean();
-    console.log(`[Opps API] Raw replies found in DB:`, JSON.stringify(replies, null, 2));
+
+    // Deduplicate: one entry per unique (senderEmail + campaignId) pair.
+    // Since replies are sorted newest-first, the first occurrence wins (latest tag/status).
+    const seen = new Map<string, any>();
+    for (const reply of replies) {
+      const key = `${reply.senderEmail.toLowerCase()}::${reply.campaignId}`;
+      if (!seen.has(key)) {
+        seen.set(key, reply);
+      }
+    }
+    const dedupedReplies = Array.from(seen.values());
 
     // Get all prospects
     const allProspects = await getAllProspects();
     
-    const opportunities = replies.map((reply: any) => {
+    const opportunities = dedupedReplies.map((reply: any) => {
       const prospect = allProspects.find(p => p.email.toLowerCase() === reply.senderEmail.toLowerCase());
-      const mapped = {
+      return {
         company: prospect?.company || "Unknown Company",
         website: prospect?.company ? `www.${prospect.company.toLowerCase().replace(/\s+/g, '')}.com` : "N/A",
         name: reply.senderName || prospect?.name || "Unknown Lead",
@@ -261,10 +270,9 @@ router.get("/opportunities", verifyToken, async (req: any, res: Response) => {
         status: reply.tag || "Contacted",
         receivedAt: reply.receivedAt
       };
-      return mapped;
     });
 
-    console.log(`[Opps API] Fully mapped Opportunities array:`, JSON.stringify(opportunities, null, 2));
+    console.log(`[Opps API] Returning ${opportunities.length} deduplicated opportunities`);
 
     return res.json({
       success: true,

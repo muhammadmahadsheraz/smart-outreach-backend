@@ -50,6 +50,21 @@ export async function findUserByEmail(email: string): Promise<IUser | null> {
     return await User.findOne({ email: email.toLowerCase() });
 }
 
+export async function verifyUser(email: string, password: string): Promise<IUser | null> {
+    await connectToDb();
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+        return null;
+    }
+    
+    const isValid = verifyPassword(password, user.password);
+    if (!isValid) {
+        return null;
+    }
+    
+    return user;
+}
+
 export async function createUser(params: {
     firstName: string;
     lastName: string;
@@ -85,13 +100,25 @@ export async function createUser(params: {
     };
 }
 
-export async function verifyUser(email: string, password: string): Promise<UserRecord | null> {
+export async function updateUser(userId: string, updates: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    company?: string;
+    password?: string;
+}): Promise<UserRecord | null> {
     await connectToDb();
-    const user = await findUserByEmail(email);
+
+    const updateData: any = {};
+    if (updates.firstName) updateData.firstName = updates.firstName;
+    if (updates.lastName) updateData.lastName = updates.lastName;
+    if (updates.email) updateData.email = updates.email.toLowerCase();
+    if (updates.company) updateData.company = updates.company;
+    if (updates.password) updateData.password = hashPassword(updates.password);
+
+    const user = await User.findByIdAndUpdate(userId, updateData, { new: true });
     if (!user) return null;
-    
-    if (!verifyPassword(password, user.password)) return null;
-    
+
     return {
         _id: user._id.toString(),
         firstName: user.firstName,
@@ -99,6 +126,11 @@ export async function verifyUser(email: string, password: string): Promise<UserR
         email: user.email,
         company: user.company,
     };
+}
+
+export async function findUserById(userId: string): Promise<IUser | null> {
+    await connectToDb();
+    return await User.findById(userId);
 }
 
 // Company functions
