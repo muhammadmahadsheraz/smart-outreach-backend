@@ -3,6 +3,8 @@
  * Huge array of realistic business contacts organized by industry
  */
 
+import Prospect from "../models/Prospect";
+
 interface SearchCriteria {
   country?: string;
   jobTitles?: string[];
@@ -11,7 +13,7 @@ interface SearchCriteria {
   employees?: string;
 }
 
-interface Prospect {
+interface ProspectData {
   id: number;
   company: string;
   url: string;
@@ -24,8 +26,8 @@ interface Prospect {
   keywords?: string[];
 }
 
-// Comprehensive prospect database
-export const PROSPECTS_DATABASE: Prospect[] = [
+// Comprehensive prospect database (fallback/seed data)
+export const PROSPECTS_DATABASE: ProspectData[] = [
   // Technology - 7 prospects
   {
     id: 1,
@@ -105,18 +107,53 @@ export const PROSPECTS_DATABASE: Prospect[] = [
     employees: "201–500",
     keywords: ["payments", "fintech", "SaaS"],
   },
-
-
-
 ];
+
+/**
+ * Get all prospects from database and fallback array combined
+ */
+export async function getAllProspects(): Promise<ProspectData[]> {
+  try {
+    const dbProspects = await Prospect.find().lean();
+    const dbProspectsData: ProspectData[] = dbProspects.map((p: any) => ({
+      id: p.id,
+      company: p.company,
+      url: p.url,
+      name: p.name,
+      email: p.email,
+      role: p.role,
+      industry: p.industry,
+      country: p.country,
+      employees: p.employees,
+      keywords: p.keywords,
+    }));
+
+    // Combine database prospects with hardcoded ones
+    const allProspects = [...PROSPECTS_DATABASE, ...dbProspectsData];
+    
+    // Remove duplicates by email
+    const uniqueProspects = allProspects.reduce((acc, prospect) => {
+      if (!acc.find(p => p.email.toLowerCase() === prospect.email.toLowerCase())) {
+        acc.push(prospect);
+      }
+      return acc;
+    }, [] as ProspectData[]);
+
+    return uniqueProspects;
+  } catch (error) {
+    console.error("Error fetching prospects from database:", error);
+    return PROSPECTS_DATABASE;
+  }
+}
 
 export async function searchProspectsDatabase(
   criteria: SearchCriteria
-): Promise<Prospect[]> {
+): Promise<ProspectData[]> {
   try {
     console.log("Searching prospects database with criteria:", criteria);
 
-    let results = [...PROSPECTS_DATABASE];
+    // Get all prospects (DB + hardcoded)
+    let results = await getAllProspects();
 
     // Filter by country
     if (criteria.country && criteria.country.trim()) {

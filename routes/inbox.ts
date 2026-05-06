@@ -27,28 +27,65 @@ const verifyToken = (req: any, res: any, next: any) => {
   }
 };
 
-// Get all inbox messages for logged-in user
+// Get all inbox messages for logged-in user (grouped by thread)
 router.get("/", verifyToken, async (req: any, res) => {
   try {
     const userId = req.user.userId;
     const messages = await InboxMessage.find({ userId }).sort({ receivedAt: -1 }).lean();
 
+    // Group messages by threadId
+    const threadsMap = new Map<string, any[]>();
+    
+    for (const msg of messages) {
+      const threadKey = msg.threadId || msg._id.toString();
+      if (!threadsMap.has(threadKey)) {
+        threadsMap.set(threadKey, []);
+      }
+      threadsMap.get(threadKey)!.push(msg);
+    }
+
+    // Convert to array of threads, sorted by most recent message
+    const threads = Array.from(threadsMap.values()).map(threadMessages => {
+      // Sort messages within thread by date (oldest first)
+      threadMessages.sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime());
+      
+      const latestMessage = threadMessages[threadMessages.length - 1];
+      
+      return {
+        id: latestMessage.threadId || latestMessage._id.toString(),
+        threadId: latestMessage.threadId || latestMessage._id.toString(),
+        senderName: latestMessage.senderName || "Unknown",
+        senderEmail: latestMessage.senderEmail,
+        subject: latestMessage.subject,
+        preview: latestMessage.preview || latestMessage.body.substring(0, 100),
+        date: new Date(latestMessage.receivedAt).toLocaleDateString(),
+        tag: latestMessage.tag,
+        isRead: threadMessages.every(m => m.isRead), // Thread is read if all messages are read
+        messageCount: threadMessages.length,
+        messages: threadMessages.map((m: any) => ({
+          id: m._id.toString(),
+          senderName: m.senderName || "Unknown",
+          senderEmail: m.senderEmail,
+          subject: m.subject,
+          body: m.body,
+          receivedAt: m.receivedAt,
+          isRead: m.isRead,
+          tag: m.tag,
+        })),
+        // For backwards compatibility
+        body: latestMessage.body,
+        from: latestMessage.senderEmail,
+        to: userId,
+        timestamp: latestMessage.receivedAt?.toISOString(),
+      };
+    });
+
+    // Sort threads by most recent message
+    threads.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
     res.json({
       ok: true,
-      messages: messages.map((msg: any) => ({
-        id: msg._id?.toString(),
-        senderName: msg.senderName || "Unknown",
-        senderEmail: msg.senderEmail,
-        subject: msg.subject,
-        preview: msg.preview || msg.body.substring(0, 100),
-        date: new Date(msg.receivedAt).toLocaleDateString(),
-        tag: msg.tag, // Pass raw tag string
-        isRead: msg.isRead,
-        body: msg.body,
-        from: msg.senderEmail,
-        to: userId,
-        timestamp: msg.receivedAt?.toISOString(),
-      })),
+      messages: threads,
     });
   } catch (error: any) {
     console.error("🔴 Error fetching inbox:", error.message);

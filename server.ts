@@ -13,6 +13,7 @@ try {
 
 import authRoutes from "./routes/auth";
 import prospectsRoutes from "./routes/prospects";
+import prospectUploadRoutes from "./routes/prospectUpload";
 import campaignsRoutes from "./routes/campaigns";
 import inboxRoutes from "./routes/inbox";
 import demoRoutes from "./routes/demo";
@@ -35,6 +36,7 @@ app.use(bodyParser.json());
 
 app.use("/api", authRoutes);
 app.use("/api/prospects", prospectsRoutes);
+app.use("/api/prospects", prospectUploadRoutes);
 app.use("/api/campaigns", campaignsRoutes);
 app.use("/api/inbox", inboxRoutes);
 app.use("/api/demo", demoRoutes);

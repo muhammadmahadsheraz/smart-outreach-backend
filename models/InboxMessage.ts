@@ -12,6 +12,7 @@ export interface IInboxMessage extends Document {
   tag?: "lead" | "meeting_booked" | "possible";
   campaignId?: string;
   gmailMessageId?: string;
+  threadId?: string; // Groups emails from same sender + same campaign
   createdAt: Date;
   updatedAt: Date;
 }
@@ -29,6 +30,7 @@ const inboxMessageSchema = new Schema<IInboxMessage>(
     tag: { type: String, enum: ["lead", "meeting_booked", "possible", "not_interested", "wrong_person"] },
     campaignId: { type: String },
     gmailMessageId: { type: String, unique: true, sparse: true },
+    threadId: { type: String, index: true }, // Groups emails from same sender + same campaign
   },
   {
     timestamps: true,

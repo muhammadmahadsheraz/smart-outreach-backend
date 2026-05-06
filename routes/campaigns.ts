@@ -2,7 +2,7 @@ import express, { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import Campaign from "../models/Campaign";
 import { InboxMessage } from "../models/InboxMessage";
-import { PROSPECTS_DATABASE } from "../lib/prospectDatabase";
+import { PROSPECTS_DATABASE, getAllProspects } from "../lib/prospectDatabase";
 import {
   CampaignRecipient,
   sendCampaignSequence,
@@ -247,8 +247,11 @@ router.get("/opportunities", verifyToken, async (req: any, res: Response) => {
     const replies = await InboxMessage.find(query).sort({ receivedAt: -1 }).lean();
     console.log(`[Opps API] Raw replies found in DB:`, JSON.stringify(replies, null, 2));
 
+    // Get all prospects
+    const allProspects = await getAllProspects();
+    
     const opportunities = replies.map((reply: any) => {
-      const prospect = PROSPECTS_DATABASE.find(p => p.email.toLowerCase() === reply.senderEmail.toLowerCase());
+      const prospect = allProspects.find(p => p.email.toLowerCase() === reply.senderEmail.toLowerCase());
       const mapped = {
         company: prospect?.company || "Unknown Company",
         website: prospect?.company ? `www.${prospect.company.toLowerCase().replace(/\s+/g, '')}.com` : "N/A",
@@ -277,6 +280,31 @@ router.get("/opportunities", verifyToken, async (req: any, res: Response) => {
 });
 
 
+
+// Get prospects for a specific campaign — must be before /:id to avoid route conflict
+router.get("/:id/prospects", verifyToken, async (req: any, res: Response) => {
+  try {
+    const userId = req.user.userId;
+    const campaign = await Campaign.findOne({ _id: req.params.id, userId });
+    if (!campaign) {
+      return res.status(404).json({ success: false, error: "Campaign not found" });
+    }
+
+    // Get all prospects from database and hardcoded array
+    const allProspects = await getAllProspects();
+    const prospects = allProspects.filter((p) =>
+      campaign.selectedProspects.includes(p.id)
+    );
+
+    return res.json({ success: true, prospects });
+  } catch (error) {
+    console.error("Fetch campaign prospects error:", error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch prospects",
+    });
+  }
+});
 
 // Get campaign by ID
 router.get("/:id", async (req: Request, res: Response) => {

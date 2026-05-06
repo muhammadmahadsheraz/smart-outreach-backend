@@ -203,6 +203,28 @@ export async function syncGmailMessages(userId: string): Promise<{ synced: numbe
 
         // Extract body text
         const body = extractBodyFromPayload(msgDetail.data.payload);
+        
+        // 3. Attribute to exact campaign using the hidden ID
+        const attributionMatch = body.match(/attribution-id:smart-outreach-cid-([a-f\d]{24})/i);
+        const specificCampaignId = attributionMatch ? attributionMatch[1] : null;
+
+        console.log(`[Gmail Sync] Scanned body of length ${body.length} for ${senderEmail}`);
+        console.log(`[Gmail Sync] Attribution Match found? ${!!attributionMatch}`);
+        console.log(`[Gmail Sync] specificCampaignId resolved to: ${specificCampaignId}`);
+
+        // CRITICAL: Only sync emails that have a campaign attribution ID
+        if (!specificCampaignId) {
+          console.log(`⏭️ [gmail] Skipping email from ${senderEmail} (no campaign attribution ID found)`);
+          continue;
+        }
+
+        // Verify the campaign belongs to this user
+        const campaignBelongsToUser = userCampaigns.some(c => c._id.toString() === specificCampaignId);
+        if (!campaignBelongsToUser) {
+          console.log(`⏭️ [gmail] Skipping email from ${senderEmail} (campaign ${specificCampaignId} doesn't belong to user)`);
+          continue;
+        }
+
         const preview = body.substring(0, 150);
 
         // Auto-tag based on content
@@ -218,13 +240,25 @@ export async function syncGmailMessages(userId: string): Promise<{ synced: numbe
           tag = "possible";
         }
 
-        // 3. Attribute to exact campaign using the hidden ID
-        const attributionMatch = body.match(/attribution-id:smart-outreach-cid-([a-f\d]{24})/i);
-        const specificCampaignId = attributionMatch ? attributionMatch[1] : null;
+        // 4. Check if this email belongs to an existing thread (same sender + same campaign)
+        let threadId: string | undefined;
+        if (specificCampaignId) {
+          // Look for existing messages from this sender in this campaign
+          const existingThread = await InboxMessage.findOne({
+            userId,
+            senderEmail: senderEmail.toLowerCase(),
+            campaignId: specificCampaignId,
+          }).sort({ receivedAt: 1 }); // Get the first message in the thread
 
-        console.log(`[Gmail Sync] Scanned body of length ${body.length} for ${senderEmail}`);
-        console.log(`[Gmail Sync] Attribution Match found? ${!!attributionMatch}`);
-        console.log(`[Gmail Sync] specificCampaignId resolved to: ${specificCampaignId}`);
+          if (existingThread) {
+            // Use existing threadId or create one from the first message
+            threadId = existingThread.threadId || existingThread._id.toString();
+            console.log(`[Gmail Sync] Found existing thread: ${threadId} for ${senderEmail} in campaign ${specificCampaignId}`);
+          } else {
+            // This is the first message in a new thread - threadId will be set to message._id after save
+            console.log(`[Gmail Sync] New thread will be created for ${senderEmail} in campaign ${specificCampaignId}`);
+          }
+        }
 
         // Save to DB
         const message = new InboxMessage({
@@ -239,12 +273,21 @@ export async function syncGmailMessages(userId: string): Promise<{ synced: numbe
           tag,
           gmailMessageId,
           campaignId: specificCampaignId, // Link this message to the campaign!
+          threadId, // Group with other messages from same sender + campaign
         });
 
         await message.save();
+
+        // If this is the first message in a new thread, set threadId to its own _id
+        if (!threadId && specificCampaignId) {
+          message.threadId = message._id.toString();
+          await message.save();
+          console.log(`[Gmail Sync] Created new thread: ${message.threadId}`);
+        }
+
         syncedCount++;
 
-        // 4. Update Campaign Reply Count
+        // 5. Update Campaign Reply Count
         try {
           if (specificCampaignId) {
             // HIGH CERTAINTY: Attribution ID found
