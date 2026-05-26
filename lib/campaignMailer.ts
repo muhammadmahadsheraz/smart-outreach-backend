@@ -174,12 +174,15 @@ export async function sendCampaignSequence(
       const subject = personalizeBody(template.subject, recipient);
       let bodyText = personalizeBody(template.body, recipient);
 
+      // Tracking links are applied after personalization so generated URLs keep campaign context.
       bodyText = wrapLinksWithTracking(bodyText, args.campaignId);
 
       const trackingBase =
         process.env.TRACKING_BASE_URL || "http://localhost:4000/api/track";
       const openPixelUrl = `${trackingBase}/open?c=${args.campaignId}`;
       const attributionId = `smart-outreach-cid-${args.campaignId}`;
+
+      // Hidden attribution lets Gmail reply sync connect responses to the exact campaign.
       const bodyHtml =
         bodyText.replace(/\n/g, "<br/>") +
         `<img src="${openPixelUrl}" width="1" height="1" style="display:none;" />` +

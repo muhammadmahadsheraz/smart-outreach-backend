@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface ICompany extends Document {
-    userId: string;  // Reference to User._id (MongoDB ObjectId as string)
+    userId: string;
     companyName: string;
     website: string;
     description: string;
@@ -12,7 +12,7 @@ export interface ICompany extends Document {
 
 export type CompanyRecord = {
     _id?: any;
-    userId: string;  // Reference to User._id (MongoDB ObjectId as string)
+    userId: string;
     companyName: string;
     website: string;
     description: string;

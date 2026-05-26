@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IProspect extends Document {
-  id: number; // Unique numeric ID for backwards compatibility
+  id: number;
   company: string;
   url: string;
   name: string;
@@ -11,7 +11,7 @@ export interface IProspect extends Document {
   country?: string;
   employees?: string;
   keywords?: string[];
-  userId?: string; // Optional: to track which user added this prospect
+  userId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,7 +33,6 @@ const prospectSchema = new Schema<IProspect>(
   { timestamps: true }
 );
 
-// Index for faster lookups
 prospectSchema.index({ email: 1 });
 prospectSchema.index({ userId: 1 });
 prospectSchema.index({ id: 1 });

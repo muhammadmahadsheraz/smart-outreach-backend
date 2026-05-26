@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IInboxMessage extends Document {
-  userId: string; // email of the user
+  userId: string;
   senderName?: string;
   senderEmail: string;
   subject: string;
@@ -12,7 +12,7 @@ export interface IInboxMessage extends Document {
   tag?: "lead" | "meeting_booked" | "possible";
   campaignId?: string;
   gmailMessageId?: string;
-  threadId?: string; // Groups emails from same sender + same campaign
+  threadId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,7 +30,7 @@ const inboxMessageSchema = new Schema<IInboxMessage>(
     tag: { type: String, enum: ["lead", "meeting_booked", "possible", "not_interested", "wrong_person"] },
     campaignId: { type: String },
     gmailMessageId: { type: String, unique: true, sparse: true },
-    threadId: { type: String, index: true }, // Groups emails from same sender + same campaign
+    threadId: { type: String, index: true },
   },
   {
     timestamps: true,

@@ -7,8 +7,6 @@ async function clearInbox() {
     console.log("Connecting to MongoDB...");
     await mongoose.connect(MONGO_URI);
     
-    // We need to access the collection directly or define a temp model 
-    // since we are running outside the app context
     const InboxMessage = mongoose.model('InboxMessage', new mongoose.Schema({}, { strict: false }));
     
     console.log("Deleting all messages from 'inboxmessages' collection...");

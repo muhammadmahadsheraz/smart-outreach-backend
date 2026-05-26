@@ -16,7 +16,6 @@ router.post("/search", async (req: Request, res: Response) => {
     const body: SearchQuery = req.body;
     const { country, jobTitles, industry, keywords, employees } = body;
 
-    // Search the prospect database
     const prospects = await searchProspectsDatabase({
       country: country || undefined,
       jobTitles: jobTitles || undefined,

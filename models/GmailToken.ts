@@ -1,12 +1,12 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IGmailToken extends Document {
-  userId: string; // Reference to User._id
-  gmailEmail: string; // The Gmail address connected
+  userId: string;
+  gmailEmail: string;
   accessToken: string;
   refreshToken: string;
-  expiryDate: number; // Token expiry timestamp in ms
-  historyId?: string; // Gmail historyId for incremental sync
+  expiryDate: number;
+  historyId?: string;
   lastSyncAt?: Date;
   createdAt: Date;
   updatedAt: Date;

@@ -10,7 +10,6 @@ const SPECIAL_CHARACTER_PATTERN = /[^A-Za-z0-9]/;
 const isValidPassword = (password: string) =>
     password.length >= 8 && SPECIAL_CHARACTER_PATTERN.test(password);
 
-// Middleware to verify JWT token
 const verifyToken = (req: any, res: any, next: any) => {
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(" ")[1];
@@ -44,7 +43,6 @@ router.post("/login", async (req, res) => {
             return;
         }
 
-        // Generate JWT token
         const token = sign(
             { 
                 userId: user._id.toString(),
@@ -98,7 +96,6 @@ router.post("/signup", async (req, res) => {
             password 
         });
 
-        // Create settings entry for the new user
         await Settings.create({
             userId: user._id.toString(),
             personalInfo: {
@@ -117,7 +114,6 @@ router.post("/signup", async (req, res) => {
             },
         });
 
-        // Generate JWT token
         const token = sign(
             { 
                 userId: user._id.toString(),
@@ -150,7 +146,6 @@ router.post("/signup", async (req, res) => {
     }
 });
 
-// Company endpoints
 router.post("/company", verifyToken, async (req: any, res) => {
     try {
         const { companyName, website, description, brochureUrl } = req.body;
@@ -194,7 +189,6 @@ router.get("/company", verifyToken, async (req: any, res) => {
     }
 });
 
-// Client endpoints
 router.post("/client", verifyToken, async (req: any, res) => {
     try {
         const { niches, location, decisionMakers, targetCompanies } = req.body;
@@ -238,7 +232,6 @@ router.get("/client", verifyToken, async (req: any, res) => {
     }
 });
 
-// Product endpoints
 router.post("/product", verifyToken, async (req: any, res) => {
     try {
         const { product, edge, successStories } = req.body;
@@ -281,7 +274,6 @@ router.get("/product", verifyToken, async (req: any, res) => {
     }
 });
 
-// Settings endpoints
 router.get("/settings", verifyToken, async (req: any, res) => {
     try {
         const userId = req.user.userId;
@@ -310,15 +302,13 @@ router.post("/settings/personal-info", verifyToken, async (req: any, res) => {
             return;
         }
 
-        // ── Password update ──────────────────────────────────────────────────
         if (newPassword && newPassword.trim() !== "") {
-            // oldPassword is required when changing password
             if (!oldPassword || oldPassword.trim() === "") {
                 res.status(400).json({ ok: false, error: "Old password is required to set a new password" });
                 return;
             }
 
-            // Verify old password against User model
+            // Password changes require the current password, even when profile fields update too.
             const currentEmail = email || settings.personalInfo.email;
             const user = await verifyUser(currentEmail, oldPassword);
             if (!user) {
@@ -326,11 +316,9 @@ router.post("/settings/personal-info", verifyToken, async (req: any, res) => {
                 return;
             }
 
-            // Update password in User model (hashed)
             await updateUser(userId, { password: newPassword });
         }
 
-        // ── Personal info update ─────────────────────────────────────────────
         const userUpdates: { firstName?: string; lastName?: string; email?: string } = {};
         if (firstName && firstName.trim()) {
             settings.personalInfo.firstName = firstName;
@@ -347,7 +335,7 @@ router.post("/settings/personal-info", verifyToken, async (req: any, res) => {
 
         await settings.save();
 
-        // Sync User model with any changed personal info fields
+        // Profile data is mirrored to User for auth/session responses and Settings for the UI.
         if (Object.keys(userUpdates).length > 0) {
             await updateUser(userId, userUpdates);
         }
@@ -370,7 +358,6 @@ router.post("/settings/billing", verifyToken, async (req: any, res) => {
             return;
         }
 
-        // Update billing details (allow empty string to clear fields)
         if (companyName !== undefined) settings.billingDetails.companyName = companyName;
         if (address !== undefined) settings.billingDetails.address = address;
         if (city !== undefined) settings.billingDetails.city = city;
@@ -380,7 +367,6 @@ router.post("/settings/billing", verifyToken, async (req: any, res) => {
 
         await settings.save();
 
-        // Sync company name to User model since it's shared
         if (companyName && companyName.trim()) {
             await updateUser(userId, { company: companyName });
         }

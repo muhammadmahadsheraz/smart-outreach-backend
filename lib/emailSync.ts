@@ -27,7 +27,6 @@ export async function syncGmailInbox(
           return;
         }
 
-        // Search for recent/unseen emails (last 20)
         imap.search(["UNSEEN"], (err: any, results: number[]) => {
           if (err) {
             imap.end();
@@ -41,7 +40,6 @@ export async function syncGmailInbox(
             return;
           }
 
-          // Limit to last 20 recent emails
           const toFetch = results.slice(-20);
           const f = imap.fetch(toFetch, { bodies: "" });
 
@@ -56,7 +54,6 @@ export async function syncGmailInbox(
 
                 const gmailMessageId = parsed.messageId || `msg-${Date.now()}-${seqno}`;
 
-                // Check if message already exists
                 const existing = await InboxMessage.findOne({ gmailMessageId, userId });
                 if (existing) {
                   console.log(`Message already synced: ${parsed.subject}`);
@@ -64,7 +61,6 @@ export async function syncGmailInbox(
                   return;
                 }
 
-                // Determine tag based on subject/content
                 let tag: "lead" | "meeting_booked" | "possible" | undefined;
                 const subject = (parsed.subject || "").toLowerCase();
                 const text = (parsed.text || "").toLowerCase();
@@ -77,11 +73,9 @@ export async function syncGmailInbox(
                   tag = "possible";
                 }
 
-                // Extract sender info
                 const senderEmail = parsed.from?.email || "unknown@example.com";
                 const senderName = parsed.from?.name || parsed.from?.email?.split("@")[0] || "Unknown";
 
-                // Create inbox message
                 const message = new InboxMessage({
                   userId,
                   senderName,
@@ -115,7 +109,6 @@ export async function syncGmailInbox(
           });
 
           f.on("end", () => {
-            // Wait for all messages to process
           });
         });
       });

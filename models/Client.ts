@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IClient extends Document {
-    userId: string;  // Reference to User._id (MongoDB ObjectId as string)
+    userId: string;
     niches: string[];
     location: string;
     decisionMakers?: string[];
@@ -12,7 +12,7 @@ export interface IClient extends Document {
 
 export type ClientRecord = {
     _id?: any;
-    userId: string;  // Reference to User._id (MongoDB ObjectId as string)
+    userId: string;
     niches: string[];
     location: string;
     decisionMakers?: string[];

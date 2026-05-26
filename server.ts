@@ -4,7 +4,6 @@ import path from "path";
 import bodyParser from "body-parser";
 import mongoose from "mongoose";
 
-// Load environment variables FIRST
 try {
   require("dotenv").config();
 } catch (e) {
@@ -23,7 +22,6 @@ import trackingRoutes from "./routes/tracking";
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/smart-outreach";
 
 console.log("MongoDB URI:", MONGODB_URI.substring(0, 50) + "...");
@@ -31,8 +29,6 @@ console.log("MongoDB URI:", MONGODB_URI.substring(0, 50) + "...");
 app.use(cors());
 app.use(bodyParser.json());
 
-// Ensure data directory exists or is handled by userStore
-// userStore handles it relative to process.cwd() called from here
 
 app.use("/api", authRoutes);
 app.use("/api/prospects", prospectsRoutes);
@@ -47,7 +43,6 @@ app.get("/", (req, res) => {
     res.send("Backend is running");
 });
 
-// Only start server after MongoDB connects
 mongoose
   .connect(MONGODB_URI, {
     serverSelectionTimeoutMS: 15000,

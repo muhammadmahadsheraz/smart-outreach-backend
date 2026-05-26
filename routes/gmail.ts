@@ -5,7 +5,6 @@ import { getAuthUrl, handleOAuthCallback, getGmailStatus, disconnectGmail, syncG
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 
-// Middleware to verify JWT token
 const verifyToken = (req: any, res: any, next: any) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.split(" ")[1];
@@ -23,7 +22,6 @@ const verifyToken = (req: any, res: any, next: any) => {
   }
 };
 
-// Get OAuth2 consent URL
 router.get("/auth-url", verifyToken, async (req: any, res) => {
   try {
     const userId = req.user.userId;
@@ -38,7 +36,6 @@ router.get("/auth-url", verifyToken, async (req: any, res) => {
   }
 });
 
-// OAuth2 callback — receives the authorization code from Google
 router.get("/callback", async (req: any, res) => {
   try {
     const { code, state } = req.query;
@@ -47,7 +44,6 @@ router.get("/callback", async (req: any, res) => {
       return res.status(400).json({ ok: false, error: "Missing code or state" });
     }
 
-    // Parse userId and redirect path from state
     const stateStr = state as string;
     const [userId, redirectTo] = stateStr.includes("|")
       ? stateStr.split("|")
@@ -57,7 +53,6 @@ router.get("/callback", async (req: any, res) => {
     const result = await handleOAuthCallback(code as string, userId);
     console.log("✅ [gmail] Connected Gmail:", result.gmailEmail);
 
-    // Redirect back to the frontend originating page with success
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
     res.redirect(`${frontendUrl}/${redirectTo}?gmail=connected`);
   } catch (error: any) {
@@ -67,7 +62,6 @@ router.get("/callback", async (req: any, res) => {
   }
 });
 
-// Get Gmail connection status
 router.get("/status", verifyToken, async (req: any, res) => {
   try {
     const userId = req.user.userId;
@@ -79,7 +73,6 @@ router.get("/status", verifyToken, async (req: any, res) => {
   }
 });
 
-// Sync emails from Gmail
 router.get("/sync", verifyToken, async (req: any, res) => {
   try {
     const userId = req.user.userId;
@@ -100,7 +93,6 @@ router.get("/sync", verifyToken, async (req: any, res) => {
   }
 });
 
-// Disconnect Gmail
 router.delete("/disconnect", verifyToken, async (req: any, res) => {
   try {
     const userId = req.user.userId;

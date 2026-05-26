@@ -7,7 +7,6 @@ import { getSmtpConfig, getTransporter } from "../lib/smtp";
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 
-// Middleware to verify JWT token
 const verifyToken = (req: any, res: any, next: any) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.split(" ")[1];
@@ -27,13 +26,12 @@ const verifyToken = (req: any, res: any, next: any) => {
   }
 };
 
-// Get all inbox messages for logged-in user (grouped by thread)
 router.get("/", verifyToken, async (req: any, res) => {
   try {
     const userId = req.user.userId;
     const messages = await InboxMessage.find({ userId }).sort({ receivedAt: -1 }).lean();
 
-    // Group messages by threadId
+    // The UI expects thread summaries, while storage keeps individual inbound messages.
     const threadsMap = new Map<string, any[]>();
     
     for (const msg of messages) {
@@ -44,9 +42,7 @@ router.get("/", verifyToken, async (req: any, res) => {
       threadsMap.get(threadKey)!.push(msg);
     }
 
-    // Convert to array of threads, sorted by most recent message
     const threads = Array.from(threadsMap.values()).map(threadMessages => {
-      // Sort messages within thread by date (oldest first)
       threadMessages.sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime());
       
       const latestMessage = threadMessages[threadMessages.length - 1];
@@ -60,7 +56,7 @@ router.get("/", verifyToken, async (req: any, res) => {
         preview: latestMessage.preview || latestMessage.body.substring(0, 100),
         date: new Date(latestMessage.receivedAt).toLocaleDateString(),
         tag: latestMessage.tag,
-        isRead: threadMessages.every(m => m.isRead), // Thread is read if all messages are read
+        isRead: threadMessages.every(m => m.isRead),
         messageCount: threadMessages.length,
         messages: threadMessages.map((m: any) => ({
           id: m._id.toString(),
@@ -72,7 +68,6 @@ router.get("/", verifyToken, async (req: any, res) => {
           isRead: m.isRead,
           tag: m.tag,
         })),
-        // For backwards compatibility
         body: latestMessage.body,
         from: latestMessage.senderEmail,
         to: userId,
@@ -80,7 +75,6 @@ router.get("/", verifyToken, async (req: any, res) => {
       };
     });
 
-    // Sort threads by most recent message
     threads.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     res.json({
@@ -93,7 +87,6 @@ router.get("/", verifyToken, async (req: any, res) => {
   }
 });
 
-// Get single message
 router.get("/:id", verifyToken, async (req: any, res) => {
   try {
     const userId = req.user.userId;
@@ -119,7 +112,6 @@ router.get("/:id", verifyToken, async (req: any, res) => {
   }
 });
 
-// Mark message as read
 router.patch("/:id/read", verifyToken, async (req: any, res) => {
   try {
     const userId = req.user.userId;
@@ -146,7 +138,6 @@ router.patch("/:id/read", verifyToken, async (req: any, res) => {
   }
 });
 
-// Tag message
 router.patch("/:id/tag", verifyToken, async (req: any, res) => {
   try {
     const userId = req.user.userId;
@@ -178,7 +169,6 @@ router.patch("/:id/tag", verifyToken, async (req: any, res) => {
   }
 });
 
-// Send reply to message
 router.post("/:id/reply", verifyToken, async (req: any, res) => {
   try {
     const userId = req.user.userId;
@@ -206,7 +196,6 @@ router.post("/:id/reply", verifyToken, async (req: any, res) => {
       return res.status(500).json({ ok: false, error: "SMTP is not configured" });
     }
 
-    // Send reply
     const mailOptions = {
       from: smtpConfig.from,
       to: originalMessage.senderEmail,
@@ -215,7 +204,8 @@ router.post("/:id/reply", verifyToken, async (req: any, res) => {
         : `Re: ${originalMessage.subject}`,
       text: body,
       headers: {
-        "In-Reply-To": originalMessage.gmailMessageId || "", // Attempt threading
+        // Preserve email-client threading when the original Gmail message id is available.
+        "In-Reply-To": originalMessage.gmailMessageId || "",
         "References": originalMessage.gmailMessageId || "",
       },
     };

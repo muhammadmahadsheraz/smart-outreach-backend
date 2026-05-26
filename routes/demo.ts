@@ -6,7 +6,6 @@ import { syncGmailInbox } from "../lib/emailSync";
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 
-// Middleware to verify JWT token
 const verifyToken = (req: any, res: any, next: any) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.split(" ")[1];
@@ -24,15 +23,12 @@ const verifyToken = (req: any, res: any, next: any) => {
   }
 };
 
-// Create demo data
 router.get("/demo-data", verifyToken, async (req: any, res) => {
   try {
     const userId = req.user.userId;
 
-    // Delete old demo data
     await InboxMessage.deleteMany({ userId, tag: { $in: ["lead", "meeting_booked", "possible"] } });
 
-    // Create sample messages
     const demoMessages = [
       {
         userId,
@@ -85,7 +81,6 @@ router.get("/demo-data", verifyToken, async (req: any, res) => {
   }
 });
 
-// Sync mail from Gmail
 router.get("/sync-mail", verifyToken, async (req: any, res) => {
   try {
     const gmailUser = process.env.GMAIL_USER || "mahad7132@gmail.com";

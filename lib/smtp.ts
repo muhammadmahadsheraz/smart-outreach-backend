@@ -12,7 +12,6 @@ export function getSmtpConfig() {
   const parsedPort = Number(process.env.SMTP_PORT ?? 587);
   const port = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 587;
   
-  // Use port 465 as default for secure if not specified
   const secure = process.env.SMTP_SECURE === "true" || (port === 465 && process.env.SMTP_SECURE !== "false");
   
   const from = process.env.SMTP_FROM?.trim() || user;

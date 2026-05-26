@@ -5,7 +5,7 @@ export interface IUser extends Document {
   lastName: string;
   email: string;
   company: string;
-  password: string; // hashed password
+  password: string;
   createdAt: Date;
   updatedAt: Date;
 }

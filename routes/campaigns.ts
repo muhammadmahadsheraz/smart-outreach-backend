@@ -12,7 +12,6 @@ import {
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 
-// Middleware to verify JWT token
 const verifyToken = (req: any, res: any, next: any) => {
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(" ")[1];
@@ -57,7 +56,6 @@ interface CreateCampaignBody {
   sendTime?: Date;
 }
 
-// Create new campaign
 router.post("/create", verifyToken, async (req: any, res: Response) => {
   try {
     const body: CreateCampaignBody = req.body;
@@ -132,9 +130,7 @@ router.post("/create", verifyToken, async (req: any, res: Response) => {
 
     await campaign.save();
 
-    // Start background email sending if auto-send is enabled
     if (shouldAutoSend && selectedProspectContacts.length > 0) {
-      // Don't await - just start the background job
       sendCampaignInBackground(
         campaign._id.toString(),
         campaign.name,
@@ -160,7 +156,6 @@ router.post("/create", verifyToken, async (req: any, res: Response) => {
   }
 });
 
-// Get all campaigns for the user
 router.get("/list", verifyToken, async (req: any, res: Response) => {
   try {
     const userId = req.user.userId;
@@ -178,7 +173,6 @@ router.get("/list", verifyToken, async (req: any, res: Response) => {
   }
 });
 
-// Get aggregated stats for the user
 router.get("/stats", verifyToken, async (req: any, res: Response) => {
   try {
     const userId = req.user.userId;
@@ -228,7 +222,6 @@ router.get("/stats", verifyToken, async (req: any, res: Response) => {
   }
 });
 
-// Get business opportunities (replies) for campaigns
 router.get("/opportunities", verifyToken, async (req: any, res: Response) => {
   try {
     const userId = req.user.userId;
@@ -245,8 +238,7 @@ router.get("/opportunities", verifyToken, async (req: any, res: Response) => {
 
     const replies = await InboxMessage.find(query).sort({ receivedAt: -1 }).lean();
 
-    // Deduplicate: one entry per unique (senderEmail + campaignId) pair.
-    // Since replies are sorted newest-first, the first occurrence wins (latest tag/status).
+    // Show one opportunity per prospect and campaign, using the latest reply as the current status.
     const seen = new Map<string, any>();
     for (const reply of replies) {
       const key = `${reply.senderEmail.toLowerCase()}::${reply.campaignId}`;
@@ -256,7 +248,6 @@ router.get("/opportunities", verifyToken, async (req: any, res: Response) => {
     }
     const dedupedReplies = Array.from(seen.values());
 
-    // Get all prospects
     const allProspects = await getAllProspects();
     
     const opportunities = dedupedReplies.map((reply: any) => {
@@ -288,8 +279,7 @@ router.get("/opportunities", verifyToken, async (req: any, res: Response) => {
 });
 
 
-
-// Get prospects for a specific campaign — must be before /:id to avoid route conflict
+// Order-sensitive: must be defined before "/:id".
 router.get("/:id/prospects", verifyToken, async (req: any, res: Response) => {
   try {
     const userId = req.user.userId;
@@ -298,7 +288,6 @@ router.get("/:id/prospects", verifyToken, async (req: any, res: Response) => {
       return res.status(404).json({ success: false, error: "Campaign not found" });
     }
 
-    // Get all prospects from database and hardcoded array
     const allProspects = await getAllProspects();
     const prospects = allProspects.filter((p) =>
       campaign.selectedProspects.includes(p.id)
@@ -314,7 +303,6 @@ router.get("/:id/prospects", verifyToken, async (req: any, res: Response) => {
   }
 });
 
-// Get campaign by ID
 router.get("/:id", async (req: Request, res: Response) => {
   try {
     const campaign = await Campaign.findById(req.params.id);
@@ -337,7 +325,6 @@ router.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-// Update campaign status
 router.patch("/:id/status", async (req: Request, res: Response) => {
   try {
     const { status } = req.body;
@@ -361,9 +348,6 @@ router.patch("/:id/status", async (req: Request, res: Response) => {
 
 export default router;
 
-/**
- * Background job to send campaign emails with progress tracking
- */
 async function sendCampaignInBackground(
   campaignId: string,
   campaignName: string,
@@ -386,14 +370,12 @@ async function sendCampaignInBackground(
       userId,
       recipients,
       emailSequence,
-      // Progress callback - update the database periodically
       onProgress: async (progress) => {
         try {
           await Campaign.findByIdAndUpdate(
             campaignId,
             {
               sentCount: progress.sent,
-              // You could add failedCount field if needed
               updatedAt: new Date(),
             },
             { new: true }
@@ -407,7 +389,7 @@ async function sendCampaignInBackground(
       },
     });
 
-    // Update final status
+    // Campaigns remain active after partial sends so failed recipients can be reviewed or retried.
     if (emailDelivery.skipped) {
       campaign.status = "paused";
       campaign.failureReason = emailDelivery.reason;

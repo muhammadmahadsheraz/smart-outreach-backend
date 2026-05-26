@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 
 const MONGO_URI = "mongodb+srv://mahad7132_db_user:OuZimY4ga1986odz@smartoutreach.kbw53jp.mongodb.net/?appName=smartoutreach";
-const EMAIL_ID = "mahad7132@gmail.com"; // Your login email
-const INTERNAL_ID = "69e7aab03f4b1d953854e2c2"; // Your internal DB ID
+const EMAIL_ID = "mahad7132@gmail.com";
+const INTERNAL_ID = "69e7aab03f4b1d953854e2c2";
 
 async function migrate() {
   try {

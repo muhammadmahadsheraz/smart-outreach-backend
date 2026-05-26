@@ -7,29 +7,25 @@ export interface Email {
 }
 
 export interface ICampaign extends Document {
-  userId: string;  // Reference to User._id (MongoDB ObjectId as string)
+  userId: string;
   name: string;
-  // Step 0: Ideal Customer
   country?: string;
   jobTitles?: string[];
   industry?: string;
   keywords?: string;
   employees?: string;
-  selectedProspects: number[]; // Prospect IDs
-  prospectEmails?: string[]; // Prospect Email addresses for quick lookup
+  selectedProspects: number[];
+  prospectEmails?: string[];
   
-  // Step 1: Offer
   product: string;
   targetCustomer: string;
   successStories: string;
   competitorDifference: string;
   
-  // Step 2: Confirm Messages
   subject: string;
   messageBody: string;
   emailSequence?: Email[];
   
-  // Step 3: Automate
   sendTime?: Date;
   status: "draft" | "scheduled" | "sent" | "sending" | "active" | "paused";
   recipientCount: number;

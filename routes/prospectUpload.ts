@@ -10,11 +10,10 @@ import { CampaignRecipient, sendCampaignSequence } from "../lib/campaignMailer";
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 
-// Configure multer for file upload (memory storage)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 10 * 1024 * 1024,
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
@@ -30,7 +29,6 @@ const upload = multer({
   },
 });
 
-// Middleware to verify JWT token
 const verifyToken = (req: any, res: any, next: any) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.split(" ")[1];
@@ -61,13 +59,11 @@ interface ProspectRow {
   keywords?: string;
 }
 
-// Get next available prospect ID
 async function getNextProspectId(): Promise<number> {
   const lastProspect = await Prospect.findOne().sort({ id: -1 }).limit(1);
-  return lastProspect ? lastProspect.id + 1 : 1000; // Start from 1000 for uploaded prospects
+  return lastProspect ? lastProspect.id + 1 : 1000;
 }
 
-// Parse CSV data
 function parseCSV(buffer: Buffer): Promise<ProspectRow[]> {
   return new Promise((resolve, reject) => {
     const results: ProspectRow[] = [];
@@ -76,13 +72,12 @@ function parseCSV(buffer: Buffer): Promise<ProspectRow[]> {
     stream
       .pipe(csv())
       .on("data", (data) => {
-        // Normalize column names (case-insensitive)
+        // Normalize header names so exports from different CRM tools map consistently.
         const normalized: any = {};
         Object.keys(data).forEach((key) => {
           normalized[key.toLowerCase().trim()] = data[key];
         });
 
-        // Map to expected format
         const row: ProspectRow = {
           name: normalized.name || normalized.firstname || normalized["first name"] || "",
           company: normalized.company || normalized.organization || "",
@@ -95,7 +90,6 @@ function parseCSV(buffer: Buffer): Promise<ProspectRow[]> {
           keywords: normalized.keywords || "",
         };
 
-        // Only add if required fields are present
         if (row.name && row.email && row.company) {
           results.push(row);
         }
@@ -105,7 +99,6 @@ function parseCSV(buffer: Buffer): Promise<ProspectRow[]> {
   });
 }
 
-// Upload prospects CSV and link to campaign
 router.post("/upload", verifyToken, upload.single("file"), async (req: any, res: Response) => {
   try {
     const userId = req.user.userId;
@@ -125,7 +118,6 @@ router.post("/upload", verifyToken, upload.single("file"), async (req: any, res:
       });
     }
 
-    // Verify campaign exists and belongs to user
     const campaign = await Campaign.findOne({ _id: campaignId, userId });
     if (!campaign) {
       return res.status(404).json({
@@ -134,7 +126,6 @@ router.post("/upload", verifyToken, upload.single("file"), async (req: any, res:
       });
     }
 
-    // Parse CSV
     let prospectRows: ProspectRow[];
     try {
       prospectRows = await parseCSV(req.file.buffer);
@@ -152,25 +143,21 @@ router.post("/upload", verifyToken, upload.single("file"), async (req: any, res:
       });
     }
 
-    // Get starting ID
     let nextId = await getNextProspectId();
     const newProspects: any[] = [];
     const newProspectIds: number[] = [];
     const newProspectEmails: string[] = [];
 
-    // Create prospect documents
+    // Existing prospects are reused by email so uploads do not create duplicate contacts.
     for (const row of prospectRows) {
-      // Check if prospect with this email already exists
       const existingProspect = await Prospect.findOne({ 
         email: row.email.toLowerCase() 
       });
 
       if (existingProspect) {
-        // Use existing prospect
         newProspectIds.push(existingProspect.id);
         newProspectEmails.push(existingProspect.email.toLowerCase());
       } else {
-        // Create new prospect
         const prospect = {
           id: nextId++,
           name: row.name,
@@ -191,12 +178,10 @@ router.post("/upload", verifyToken, upload.single("file"), async (req: any, res:
       }
     }
 
-    // Bulk insert new prospects
     if (newProspects.length > 0) {
       await Prospect.insertMany(newProspects);
     }
 
-    // Track which prospects are NEW to this campaign (not in campaign.selectedProspects before)
     const previousProspectIds = new Set(campaign.selectedProspects);
     const newToCampaignIds = newProspectIds.filter(id => !previousProspectIds.has(id));
     
@@ -204,7 +189,6 @@ router.post("/upload", verifyToken, upload.single("file"), async (req: any, res:
     console.log(`📊 [Upload] New prospect IDs being added: ${newProspectIds.length}`);
     console.log(`📊 [Upload] Prospects NEW to this campaign: ${newToCampaignIds.length}`);
 
-    // Update campaign with new prospect IDs
     campaign.selectedProspects = [
       ...new Set([...campaign.selectedProspects, ...newProspectIds]),
     ];
@@ -213,7 +197,7 @@ router.post("/upload", verifyToken, upload.single("file"), async (req: any, res:
     ];
     campaign.recipientCount = campaign.selectedProspects.length;
 
-    // If campaign was completed/sent and we're adding prospects NEW to this campaign, reactivate it
+    // Re-open completed campaigns only for prospects newly added to that campaign.
     const shouldSendEmails = newToCampaignIds.length > 0 && 
       (campaign.status === "sent" || campaign.status === "active" || campaign.status === "paused");
     
@@ -224,16 +208,13 @@ router.post("/upload", verifyToken, upload.single("file"), async (req: any, res:
 
     await campaign.save();
 
-    // Send emails to prospects that are NEW to this campaign
     if (shouldSendEmails && newToCampaignIds.length > 0) {
       console.log(`📧 [Upload] Preparing to send emails to ${newToCampaignIds.length} prospects new to this campaign`);
       
-      // Get the full prospect data for prospects new to this campaign
       const newToCampaignProspects = await Prospect.find({ 
         id: { $in: newToCampaignIds } 
       }).lean();
       
-      // Prepare recipient list
       const campaignNewRecipients: CampaignRecipient[] = newToCampaignProspects.map((p: any) => ({
         email: p.email,
         name: p.name,
@@ -245,7 +226,6 @@ router.post("/upload", verifyToken, upload.single("file"), async (req: any, res:
 
       console.log(`📧 [Upload] Recipients for campaign:`, JSON.stringify(campaignNewRecipients, null, 2));
 
-      // Get email sequence from campaign
       const emailSequence = Array.isArray(campaign.emailSequence) && campaign.emailSequence.length > 0
         ? campaign.emailSequence
         : [{ id: "1", subject: campaign.subject, body: campaign.messageBody }];
@@ -255,7 +235,6 @@ router.post("/upload", verifyToken, upload.single("file"), async (req: any, res:
       console.log(`📧 [Upload] Campaign Name: ${campaign.name}`);
       console.log(`📧 [Upload] User ID: ${userId}`);
 
-      // Send emails in background
       sendEmailsToNewProspects(
         campaign._id.toString(),
         campaign.name,
@@ -291,9 +270,6 @@ router.post("/upload", verifyToken, upload.single("file"), async (req: any, res:
   }
 });
 
-/**
- * Background job to send campaign emails to newly added prospects
- */
 async function sendEmailsToNewProspects(
   campaignId: string,
   campaignName: string,
@@ -324,7 +300,6 @@ async function sendEmailsToNewProspects(
       userId,
       recipients,
       emailSequence,
-      // Progress callback - update the database periodically
       onProgress: async (progress) => {
         try {
           console.log(`📊 [sendEmailsToNewProspects] Progress: ${progress.sent}/${progress.total} sent (${progress.percentComplete}%)`);
@@ -344,11 +319,11 @@ async function sendEmailsToNewProspects(
 
     console.log(`📧 [sendEmailsToNewProspects] Email delivery result:`, JSON.stringify(emailDelivery, null, 2));
 
-    // Update final status
     const updatedCampaign = await Campaign.findById(campaignId);
     if (updatedCampaign) {
       console.log(`📧 [sendEmailsToNewProspects] Updating campaign final status...`);
       
+      // Keep campaign state actionable after background delivery finishes or fails.
       if (emailDelivery.skipped) {
         console.warn(`⚠️ [sendEmailsToNewProspects] Email delivery was SKIPPED: ${emailDelivery.reason}`);
         updatedCampaign.status = "paused";

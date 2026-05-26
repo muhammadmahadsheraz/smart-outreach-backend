@@ -21,7 +21,6 @@ export type UserRecord = {
 
 export type { CompanyRecord, ClientRecord, ProductRecord };
 
-// Connect to MongoDB using Mongoose
 async function connectToDb() {
     if (mongoose.connection.readyState === 1) {
         return;
@@ -133,7 +132,6 @@ export async function findUserById(userId: string): Promise<IUser | null> {
     return await User.findById(userId);
 }
 
-// Company functions
 export async function saveCompanyData(userId: string, data: {
     companyName: string;
     website: string;
@@ -163,7 +161,6 @@ export async function getCompanyData(userId: string): Promise<CompanyRecord | nu
     return company ? (company.toObject() as CompanyRecord) : null;
 }
 
-// Client functions
 export async function saveClientData(userId: string, data: {
     niches: string[];
     location: string;
@@ -193,7 +190,6 @@ export async function getClientData(userId: string): Promise<ClientRecord | null
     return client ? (client.toObject() as ClientRecord) : null;
 }
 
-// Product functions
 export async function saveProductData(userId: string, data: {
     product: string;
     edge: string;

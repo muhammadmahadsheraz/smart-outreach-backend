@@ -1,7 +1,3 @@
-/**
- * Real Prospect Contact Database
- * Huge array of realistic business contacts organized by industry
- */
 
 import Prospect from "../models/Prospect";
 
@@ -26,9 +22,7 @@ interface ProspectData {
   keywords?: string[];
 }
 
-// Comprehensive prospect database (fallback/seed data)
 export const PROSPECTS_DATABASE: ProspectData[] = [
-  // Technology - 7 prospects
   {
     id: 1,
     company: "Conespiracy",
@@ -109,9 +103,6 @@ export const PROSPECTS_DATABASE: ProspectData[] = [
   },
 ];
 
-/**
- * Get all prospects from database and fallback array combined
- */
 export async function getAllProspects(): Promise<ProspectData[]> {
   try {
     const dbProspects = await Prospect.find().lean();
@@ -128,10 +119,9 @@ export async function getAllProspects(): Promise<ProspectData[]> {
       keywords: p.keywords,
     }));
 
-    // Combine database prospects with hardcoded ones
     const allProspects = [...PROSPECTS_DATABASE, ...dbProspectsData];
     
-    // Remove duplicates by email
+    // Uploaded prospects override seeded duplicates by email without mutating seed data.
     const uniqueProspects = allProspects.reduce((acc, prospect) => {
       if (!acc.find(p => p.email.toLowerCase() === prospect.email.toLowerCase())) {
         acc.push(prospect);
@@ -152,10 +142,8 @@ export async function searchProspectsDatabase(
   try {
     console.log("Searching prospects database with criteria:", criteria);
 
-    // Get all prospects (DB + hardcoded)
     let results = await getAllProspects();
 
-    // Filter by country
     if (criteria.country && criteria.country.trim()) {
       const countryLower = criteria.country.toLowerCase();
       results = results.filter((p) =>
@@ -163,7 +151,6 @@ export async function searchProspectsDatabase(
       );
     }
 
-    // Filter by job titles
     if (criteria.jobTitles && criteria.jobTitles.length > 0) {
       results = results.filter((p) =>
         criteria.jobTitles!.some((title) =>
@@ -172,7 +159,6 @@ export async function searchProspectsDatabase(
       );
     }
 
-    // Filter by industry
     if (criteria.industry && criteria.industry.trim()) {
       const industryLower = criteria.industry.toLowerCase();
       results = results.filter((p) =>
@@ -180,7 +166,6 @@ export async function searchProspectsDatabase(
       );
     }
 
-    // Filter by keywords
     if (criteria.keywords && criteria.keywords.trim()) {
       const keywordArray = criteria.keywords
         .split(",")
@@ -195,13 +180,12 @@ export async function searchProspectsDatabase(
       );
     }
 
-    // Filter by employees
     if (criteria.employees && criteria.employees.trim()) {
       results = results.filter((p) => p.employees === criteria.employees);
     }
 
     console.log(`Found ${results.length} prospects matching criteria`);
-    return results; // Return all matching results (pagination handled on frontend)
+    return results;
   } catch (error) {
     console.error("Error searching prospects:", error);
     throw error;

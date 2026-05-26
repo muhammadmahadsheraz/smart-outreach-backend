@@ -3,13 +3,6 @@ import Campaign from "../models/Campaign";
 
 const router = express.Router();
 
-/**
- * GET /api/track
- * Tracks link clicks and redirects the user
- * Query params:
- *  - r: actual redirect URL
- *  - c: campaignId
- */
 router.get("/", async (req, res) => {
   try {
     const { r, c } = req.query;
@@ -21,7 +14,6 @@ router.get("/", async (req, res) => {
     const redirectUrl = decodeURIComponent(r as string);
     const campaignId = c as string;
 
-    // Log the click if we have a campaign ID
     if (campaignId) {
       try {
         await Campaign.findByIdAndUpdate(campaignId, {
@@ -33,7 +25,6 @@ router.get("/", async (req, res) => {
       }
     }
 
-    // Redirect the user immediately
     res.redirect(redirectUrl);
   } catch (error) {
     console.error("Tracking error:", error);
@@ -41,12 +32,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-/**
- * GET /api/track/open
- * Tracks email opens using a 1x1 pixel
- * Query params:
- *  - c: campaignId
- */
 router.get("/open", async (req, res) => {
   try {
     const { c } = req.query;
@@ -63,11 +48,12 @@ router.get("/open", async (req, res) => {
       }
     }
 
-    // Return a 1x1 transparent pixel
     const pixel = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
       "base64"
     );
+
+    // Return a transparent pixel so email clients can load it without visible content.
     res.writeHead(200, {
       "Content-Type": "image/png",
       "Content-Length": pixel.length,
